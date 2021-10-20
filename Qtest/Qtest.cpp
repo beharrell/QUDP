@@ -25,7 +25,7 @@ namespace Qtest
 			auto myShared = std::make_shared<ReliableQ<TestBody>>();
 			auto producer = std::async(std::launch::async, [&](std::shared_ptr<ReliableQ<TestBody>> p)
 				{
-					for (int i = 0; i < 100; ++i)
+					for (int i = 0; i < 10; ++i)
 					{
 						TestBody d(i);
 						p->EnQ(d);
@@ -37,7 +37,8 @@ namespace Qtest
 					int expected = 0;
 					while (producer.wait_for(std::chrono::milliseconds(0)) != std::future_status::ready || p->Size() != 0)
 					{
-						TestBody&& d = p->DeQ();
+						TestBody d;
+						p->DeQ(d);
 						Assert::AreEqual(expected, d.mValue);
 						expected = d.mValue + 1;
 					}
