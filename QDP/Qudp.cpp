@@ -2,7 +2,7 @@
 #include "Qudp.h"
 
 
-void Network::ProducerEnQ(std::vector<uint8_t>& data)
+void Network::ProducerEnQ(const std::vector<uint8_t>& data)
 {
 	mProdToConsumer.EnQ(data);
 }
