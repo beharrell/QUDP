@@ -24,6 +24,15 @@
     <ClInclude Include="Qudp.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="QProducer.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="QNetwork.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="QConsumer.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="pch.cpp">

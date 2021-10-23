@@ -155,6 +155,9 @@
   <ItemGroup>
     <ClInclude Include="framework.h" />
     <ClInclude Include="pch.h" />
+    <ClInclude Include="QConsumer.h" />
+    <ClInclude Include="QNetwork.h" />
+    <ClInclude Include="QProducer.h" />
     <ClInclude Include="Qudp.h" />
   </ItemGroup>
   <ItemGroup>
