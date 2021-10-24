@@ -1,22 +1,59 @@
 #pragma once
-#include <vector>
-#include <list>
+#include <chrono>
 #include <condition_variable>
+#include <list>
+#include <iomanip>
+#include <iostream>
+#include <sstream>
+#include <vector>
+
+#include <WinSock2.h>
+#include <Windows.h>
+#include "debugapi.h"
+
+std::string getTimestamp(const std::chrono::system_clock::time_point& now);
+std::string getTimestamp();
+
+template <typename... Args>
+void Log(const char* format, Args... args) {
+	std::string formatAsString = "QUDP[%s] ";
+	formatAsString += format;
+	formatAsString += "\n";
+	char buffer[2000]; // problem when printing consumer pending buffer if we increase window size
+	sprintf_s(buffer, sizeof(buffer), formatAsString.c_str(), getTimestamp().c_str(), args...);
+	OutputDebugStringA(buffer);
+}
+
 
 template <class T> class BlockingQ
 {
 private:
 	std::list<T> q;
+	std::string mQName;
 
 	std::mutex mMux;
 	std::condition_variable mConsumerSignal;
+
+	template <typename... Args>
+	void Log(const char* format, Args... args)
+	{
+		if (!mQName.empty())
+		{ 
+			::Log(format, args...);
+		}
+	}
+
 public:
+	BlockingQ(const std::string& name) :mQName(name) {}
+	BlockingQ() {} // unnamed, no logging
+
 	void EnQ(T data)
 	{
 		std::unique_lock<std::mutex> lock(mMux);
 		q.emplace_back(data);
 		if (q.size() == 1)
 		{
+			Log("%s Waking consumer", mQName.c_str());
 			mConsumerSignal.notify_one();
 		}
 	}
@@ -26,11 +63,14 @@ public:
 		std::unique_lock<std::mutex> lock(mMux);
 		if (q.size() == 0)
 		{
+			Log("%s Consumer waiting for Data", mQName.c_str());
 			auto hasData = mConsumerSignal.wait_for(lock, timeOut, [&] {return q.size() > 0; });
 			if (!hasData)
 			{
+				Log("%s Consumer timed out", mQName.c_str());
 				return false;
 			}
+			Log("%s Consumer woke with Data", mQName.c_str());
 		}
 
 		data = q.front();
@@ -43,6 +83,7 @@ public:
 		std::unique_lock<std::mutex> lock(mMux);
 		if (q.size() == 0)
 		{
+			Log("%s Consumer waiting for Data", mQName.c_str());
 			mConsumerSignal.wait(lock);
 		}
 		data = q.front();
@@ -78,6 +119,9 @@ private:
 	BlockingQ<std::vector<uint8_t>> mConsumerToProducer;
 
 public:
+	IdealNetwork() :mProdToConsumer(/*"P->C"*/), mConsumerToProducer(/*"C->P"*/)
+	{}
+
 	void ProducerEnQ(const std::vector<uint8_t>& data) override
 	{
 		mProdToConsumer.EnQ(data);
@@ -110,6 +154,57 @@ public:
 		return mConsumerToProducer.Size();
 	}
 };
+
+
+// refactor to producer
+class UdpNetwork : public INetwork
+{
+private:
+	int producerSocket;
+	sockaddr_in mConsumersAddress{};
+
+	int consumerSocket;
+	sockaddr_in mProducersAddress{};  // not known until first frame from the producer
+	bool mHaveProducerAddr{ false };
+
+	bool ReceiveData(int socket, std::vector<uint8_t>& data, std::chrono::duration<int, std::milli>& timeOut,
+		sockaddr_in* senderAddress, int* senderAddressSize);
+
+	const int consumersIncomingPort = 31415;
+
+public:
+	UdpNetwork();
+
+	~UdpNetwork();
+
+	void ProducerEnQ(const std::vector<uint8_t>& data) override;
+
+	bool ProducerDeQ(std::vector<uint8_t>& data, std::chrono::duration<int, std::milli>& timeOut) override;
+
+	void ConsumerEnQ(const std::vector<uint8_t>& data) override;
+
+	bool ConsumeDeQ(std::vector<uint8_t>& data, std::chrono::duration<int, std::milli>& timeOut) override;
+
+	/// <summary>
+	/// pull size methods out to a testing interface
+	/// </summary>
+	/// <returns></returns>
+	size_t Size()
+	{
+		return 0;
+	}
+
+	size_t ProducerToConsumerSize() override
+	{
+		return 0;
+	}
+
+	size_t ConsumerToProducerSize() override
+	{
+		return 0;
+	}
+};
+
 
 struct Header
 {

@@ -29,10 +29,11 @@ namespace Qtest
 			return prob < probability;
 		}
 
-		void TryToQ(const std::vector<uint8_t>& data, std::vector<uint8_t> dataCopy,
+		void TryToQ(const std::string & direction, const std::vector<uint8_t>& data, std::vector<uint8_t> dataCopy,
 			std::function<void(const std::vector<uint8_t>&)> sendFunction)
 		{
 			bool sendData = true;
+			Frame<TestBody> frame(data);
 
 			if (TakeAChance(mChanceOfADuplicate))
 			{
@@ -41,6 +42,7 @@ namespace Qtest
 					sendFunction(dataCopy);
 				}
 				dataCopy = data;
+				Log("%s Duplicating %d", direction.c_str(), frame.mHeader.mSeqNo);
 			}
 			else if (TakeAChance(mPrbDelay))
 			{
@@ -50,6 +52,12 @@ namespace Qtest
 				}
 				dataCopy = data;
 				sendData = false;
+				Log("%s Delaying %d", direction.c_str(), frame.mHeader.mSeqNo);
+			}
+			else if (TakeAChance(mPrbLost))
+			{
+				sendData = false;
+				Log("%s Lost %d", direction.c_str(), frame.mHeader.mSeqNo);
 			}
 
 			if (sendData)
@@ -71,14 +79,14 @@ namespace Qtest
 
 		void ProducerEnQ(const std::vector<uint8_t>& data) override
 		{
-			TryToQ(data, mCopyOfProducerData,
+			TryToQ("**Prod Data Error**",data, mCopyOfProducerData,
 				[&](const std::vector<uint8_t>& data) {IdealNetwork::ProducerEnQ(data); });
 
 		}
 
 		void ConsumerEnQ(const std::vector<uint8_t>& data) override
 		{
-			TryToQ(data, mCopyOfConsumerData,
+			TryToQ("**Consumer Ack Error**",data, mCopyOfConsumerData,
 				[&](const std::vector<uint8_t>& data) {IdealNetwork::ConsumerEnQ(data); });
 		}
 	};
@@ -118,31 +126,39 @@ namespace Qtest
 		TEST_METHOD(StressIdealNetwork)
 		{
 			auto network = std::make_shared<IdealNetwork>();
-			StressTestNetwork(network, 1000);
+			StressTestNetwork(network, 200);
 		}
 
 		TEST_METHOD(StressDuplicatingNetwork)
 		{
-			auto network = std::make_shared<ImperfectNetwork>(0.0f, .5f, 0.0f);
-			StressTestNetwork(network, 1000);
+			auto network = std::make_shared<ImperfectNetwork>(0.0f, 50.0f, 0.0f);
+			StressTestNetwork(network, 200);
 		}
 
 		TEST_METHOD(StressReorderingNetwork)
 		{
-			auto network = std::make_shared<ImperfectNetwork>(0.0f, 0.0f, .5f);
-			StressTestNetwork(network, 1000);
+			auto network = std::make_shared<ImperfectNetwork>(0.0f, 0.0f, 50.0f);
+			StressTestNetwork(network, 200);
 		}
 
 		TEST_METHOD(StressLosyNetwork)
 		{
-			auto network = std::make_shared<ImperfectNetwork>(0.5f, 0.0f, 0.0f);
-			StressTestNetwork(network, 1000);
+			auto network = std::make_shared<ImperfectNetwork>(50.0f, 0.0f, 0.0f);
+			StressTestNetwork(network, 200);
 		}
 
 		TEST_METHOD(StressReallyBadNetwork)
 		{
-			auto network = std::make_shared<ImperfectNetwork>(0.3f, 0.3f, 0.3f);
-			StressTestNetwork(network, /*60000*/1000);
+			auto network = std::make_shared<ImperfectNetwork>(50.0f/3.0f, 50.0f / 3.0f, 50.0f / 3.0f);
+			StressTestNetwork(network, /*60000*/200);
 		}
+
+		TEST_METHOD(StressUdpLoopBackNetwork)
+		{
+			auto network = std::make_shared<UdpNetwork>();
+			StressTestNetwork(network, 200);
+		}
+
+		
 	};
 }

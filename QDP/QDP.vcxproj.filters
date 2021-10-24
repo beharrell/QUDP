@@ -41,5 +41,8 @@
     <ClCompile Include="Qudp.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="QNetwork.cpp">
+      <Filter>Header Files</Filter>
+    </ClCompile>
   </ItemGroup>
 </Project>

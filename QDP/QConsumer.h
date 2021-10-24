@@ -18,15 +18,26 @@ private:
 		if (frame.mHeader.mSeqNo <= lastOrderedSeqenceNumber ||
 			pendingData.find(frame.mHeader.mSeqNo) != pendingData.end())
 		{
+			Log("Consumer - rx old frame %d", frame.mHeader.mSeqNo);
 			// duplicate frame
 			return lastOrderedSeqenceNumber;
 		}
 
 		pendingData.insert({ frame.mHeader.mSeqNo, frame });
+		
+		std::string frameNumbers;
+		for (auto pendingFrame : pendingData)
+		{
+			frameNumbers += std::to_string(pendingFrame.first) + ",";
+		}
+		Log("Consumer - pending frames %s", frameNumbers.c_str());
+
 		auto nextFrame = pendingData.find(lastOrderedSeqenceNumber + 1);
 		while (nextFrame != pendingData.end())
 		{
+			Log("Consumer - delivering %d", nextFrame->second.mHeader.mSeqNo);
 			mConsumerQ.EnQ(nextFrame->second.mBody);
+			pendingData.erase(nextFrame);
 			++lastOrderedSeqenceNumber;
 			nextFrame = pendingData.find(lastOrderedSeqenceNumber + 1);
 		}
@@ -57,6 +68,7 @@ private:
 				// dumb down the ack rate later
 				Header ackHeader(lastOrderedSeqenceNumber);
 				Frame<T> ackFrame(ackHeader);
+				Log("Consumer - acknowledging %d", lastOrderedSeqenceNumber);
 				mTransport->ConsumerEnQ(ackFrame.mBytes);
 			}
 		}
@@ -64,7 +76,7 @@ private:
 
 
 public:
-	Consumer(std::shared_ptr<INetwork>& transport) :mTransport(transport)
+	Consumer(std::shared_ptr<INetwork>& transport) :mConsumerQ("DeliveredQ"), mTransport(transport)
 	{
 		mWorker = std::async(std::launch::async, [&]() {Work(); });
 	}

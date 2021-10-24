@@ -1,9 +1,6 @@
 #pragma once
 
 
-#include <cassert>
-
-
 #include "QProducer.h"
 #include "QConsumer.h"
 

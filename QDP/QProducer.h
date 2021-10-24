@@ -21,9 +21,23 @@ private:
 		);
 		if (frame != mPendingFrames.end())
 		{
+			Log("Prod - ack %d clearing pending from %d to %d",
+				ackFrame.mHeader.mSeqNo,
+				mPendingFrames.begin()->mHeader.mSeqNo,
+				frame->mHeader.mSeqNo);
 			frame++; // erase has a (] range
 			mPendingFrames.erase(mPendingFrames.begin(), frame);
 			mTimePendingFrameLastSent = std::chrono::system_clock::now();
+
+			if (mPendingFrames.size() > 0)
+			{
+				Log("Prod - next pending frame is %d",
+					mPendingFrames.begin()->mHeader.mSeqNo);
+			}
+		}
+		else
+		{
+			Log("Prod - ack %d is old", ackFrame.mHeader.mSeqNo);
 		}
 	}
 
@@ -38,12 +52,14 @@ private:
 			auto timeSinceResend = std::chrono::duration_cast<std::chrono::milliseconds>(now - mTimePendingFrameLastSent);
 			if (timeSinceResend >= resendFrequency)
 			{
+				Log("Prod - resending frame %d",
+					mPendingFrames.front().mHeader.mSeqNo);
 				mTransport->ProducerEnQ(mPendingFrames.front().mBytes);
 				mTimePendingFrameLastSent = now;
 			}
 			else
 			{
-				timeTillNextSend = timeSinceResend;
+				timeTillNextSend = resendFrequency - timeSinceResend;
 			}
 		}
 
@@ -60,6 +76,7 @@ private:
 			auto timeTillNextResend = ResendPendingFrameIfNeeded();
 			if (mPendingFrames.size() >= mMaxPendingFrames)
 			{
+				Log("Prod - Pending q full, sleeping %dms", timeTillNextResend.count());
 				std::this_thread::sleep_for(timeTillNextResend);
 			}
 			else
@@ -69,8 +86,12 @@ private:
 				if (hasData)
 				{
 					Frame<T> frame(Header(mTxSequenceNo++), data);
+					Log("Prod - sending new frame %d", frame.mHeader.mSeqNo);
 					mTransport->ProducerEnQ(frame.mBytes);
 					mPendingFrames.emplace_back(frame);
+					Log("Prod - pending q frames %d to %d", 
+						mPendingFrames.front().mHeader.mSeqNo,
+						mPendingFrames.back().mHeader.mSeqNo);
 				}
 			}
 
@@ -83,7 +104,7 @@ private:
 		}
 	}
 public:
-	Producer(std::shared_ptr<INetwork>& transport) :mTransport(transport)
+	Producer(std::shared_ptr<INetwork>& transport) :mProducerQ("ToSendQ"), mTransport(transport)
 	{
 		mTimePendingFrameLastSent = std::chrono::system_clock::now();
 		mWorker = std::async(std::launch::async, [&]() {Work(); });
