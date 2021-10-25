@@ -160,7 +160,7 @@ public:
 class UdpNetwork : public INetwork
 {
 private:
-	int producerSocket;
+	int mProducerSocket;
 	sockaddr_in mConsumersAddress{};
 
 	int consumerSocket;
@@ -170,10 +170,22 @@ private:
 	bool ReceiveData(int socket, std::vector<uint8_t>& data, std::chrono::duration<int, std::milli>& timeOut,
 		sockaddr_in* senderAddress, int* senderAddressSize);
 
-	const int consumersIncomingPort = 31415;
+	bool mIsProducer{false};
+	bool mIsConsumer{ false };
+
+	void InitWinSock();
+	void  InitAsProducer(const std::string& consumerAddress, int consumerPort);
+	void  InitAsConsumer(int consumerPort);
 
 public:
+	// init as prod/consumer on loopback address
 	UdpNetwork();
+
+	// init as producer
+	UdpNetwork(const std::string& consumerAddress, int consumerPort);
+
+	// init as consumer
+	UdpNetwork(int consumerPort);
 
 	~UdpNetwork();
 

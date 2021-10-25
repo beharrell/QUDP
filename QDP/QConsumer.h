@@ -3,7 +3,7 @@
 #include <unordered_map>
 #include "QNetwork.h"
 
-template <class T> class Consumer
+template <class T> class QConsumer
 {
 private:
 	BlockingQ<T> mConsumerQ;
@@ -12,26 +12,45 @@ private:
 	bool mStop{ false };
 	std::unordered_map<uint16_t, Frame<T>> pendingData;
 
+	bool LooksLikeADuplicate(uint16_t lastOrderedSeqenceNumber, Frame<T>& frame)
+	{
+		constexpr uint16_t maxSeq = -1;
+		constexpr uint16_t window = maxSeq / 2;
+		const uint16_t minExcludedSequence = lastOrderedSeqenceNumber - window;
+		bool isADuplicate = false;
+		bool windowWrappedAround = minExcludedSequence > lastOrderedSeqenceNumber;
+		bool frameInExclusionWindow = false;
+		if (windowWrappedAround)
+		{
+			frameInExclusionWindow = frame.mHeader.mSeqNo <= lastOrderedSeqenceNumber || frame.mHeader.mSeqNo >= minExcludedSequence;
+		}
+		else
+		{
+			frameInExclusionWindow = minExcludedSequence <= frame.mHeader.mSeqNo && frame.mHeader.mSeqNo <= lastOrderedSeqenceNumber;
+		}
+
+		if (frameInExclusionWindow)
+		{
+			Log("Consumer - rx out of window frame %d", frame.mHeader.mSeqNo);
+			isADuplicate = true;
+		}
+		if (pendingData.find(frame.mHeader.mSeqNo) != pendingData.end())
+		{
+			Log("Consumer - rx duplicate pending frame %d", frame.mHeader.mSeqNo);
+			isADuplicate = true;
+		}
+
+		return isADuplicate;
+	}
+
 	uint16_t ProcessFrame(uint16_t lastOrderedSeqenceNumber, Frame<T>& frame)
 	{
-		// ignoring seq num wrap around for the moment
-		if (frame.mHeader.mSeqNo <= lastOrderedSeqenceNumber ||
-			pendingData.find(frame.mHeader.mSeqNo) != pendingData.end())
+		if (LooksLikeADuplicate(lastOrderedSeqenceNumber, frame))
 		{
-			Log("Consumer - rx old frame %d", frame.mHeader.mSeqNo);
-			// duplicate frame
 			return lastOrderedSeqenceNumber;
 		}
 
 		pendingData.insert({ frame.mHeader.mSeqNo, frame });
-		
-		std::string frameNumbers;
-		for (auto pendingFrame : pendingData)
-		{
-			frameNumbers += std::to_string(pendingFrame.first) + ",";
-		}
-		Log("Consumer - pending frames %s", frameNumbers.c_str());
-
 		auto nextFrame = pendingData.find(lastOrderedSeqenceNumber + 1);
 		while (nextFrame != pendingData.end())
 		{
@@ -41,6 +60,13 @@ private:
 			++lastOrderedSeqenceNumber;
 			nextFrame = pendingData.find(lastOrderedSeqenceNumber + 1);
 		}
+
+		std::string frameNumbers;
+		for (auto pendingFrame : pendingData)
+		{
+			frameNumbers += std::to_string(pendingFrame.first) + ",";
+		}
+		Log("Consumer - pending frames %s", frameNumbers.c_str());
 
 		return lastOrderedSeqenceNumber;
 	}
@@ -76,7 +102,7 @@ private:
 
 
 public:
-	Consumer(std::shared_ptr<INetwork>& transport) :mConsumerQ("DeliveredQ"), mTransport(transport)
+	QConsumer(std::shared_ptr<INetwork>& transport) :mConsumerQ("DeliveredQ"), mTransport(transport)
 	{
 		mWorker = std::async(std::launch::async, [&]() {Work(); });
 	}

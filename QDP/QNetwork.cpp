@@ -21,9 +21,16 @@ std::string getTimestamp(const std::chrono::system_clock::time_point& now) {
 	return nowSs.str();
 }
 
-
-
 UdpNetwork::UdpNetwork()
+{
+	InitWinSock();
+
+	constexpr int consumerPort = 31415;
+	InitAsProducer("127.0.0.1", consumerPort);
+	InitAsConsumer(consumerPort);
+}
+
+void UdpNetwork::InitWinSock()
 {
 	WSAData data;
 	auto result = WSAStartup(MAKEWORD(2, 2), &data);
@@ -32,9 +39,12 @@ UdpNetwork::UdpNetwork()
 		Log("UdpNetwork - failed to init Winsock %d", result);
 		exit(1);
 	}
+}
 
-	producerSocket = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
-	if (producerSocket == INVALID_SOCKET)
+void  UdpNetwork::InitAsProducer(const std::string& consumerAddress, int consumerPort)
+{
+	mProducerSocket = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+	if (mProducerSocket == INVALID_SOCKET)
 	{
 		auto error = WSAGetLastError();
 		Log("UdpNetwork - failed to create producer socket, error %d", error);
@@ -42,10 +52,24 @@ UdpNetwork::UdpNetwork()
 	}
 
 	mConsumersAddress.sin_family = AF_INET;
-	inet_pton(AF_INET, "127.0.0.1", &(mConsumersAddress.sin_addr));
-	mConsumersAddress.sin_port = htons(consumersIncomingPort);
+	auto result = inet_pton(AF_INET, consumerAddress.c_str(), &(mConsumersAddress.sin_addr));
+	if (result == 0)
+	{
+		Log("UdpNetwork - %s is not an IP address", consumerAddress.c_str());
+		exit(1);
+	}
+	else if (result == -1)
+	{
+		auto error = WSAGetLastError();
+		Log("UdpNetwork - inet_pton failed with error %d", error);
+		exit(1);
+	}
+	mConsumersAddress.sin_port = htons(consumerPort);
+	mIsProducer = true;
+}
 
-
+void  UdpNetwork::InitAsConsumer(int consumerPort)
+{
 	consumerSocket = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
 	if (consumerSocket == INVALID_SOCKET)
 	{
@@ -56,9 +80,9 @@ UdpNetwork::UdpNetwork()
 
 	sockaddr_in bindAddress;
 	bindAddress.sin_family = AF_INET;
-	inet_pton(AF_INET, "127.0.0.1", &(bindAddress.sin_addr));
-	bindAddress.sin_port = htons(consumersIncomingPort);
-	result = bind(consumerSocket, reinterpret_cast<SOCKADDR*>(&bindAddress), sizeof(bindAddress));
+	bindAddress.sin_addr.s_addr = INADDR_ANY;
+	bindAddress.sin_port = htons(consumerPort);
+	auto result = bind(consumerSocket, reinterpret_cast<SOCKADDR*>(&bindAddress), sizeof(bindAddress));
 	if (result == SOCKET_ERROR)
 	{
 		auto error = WSAGetLastError();
@@ -66,21 +90,37 @@ UdpNetwork::UdpNetwork()
 		exit(1);
 	}
 
+	mIsConsumer = true;
+}
 
+UdpNetwork::UdpNetwork(const std::string& consumerAddress, int consumerPort)
+{
+	InitWinSock();
+	InitAsProducer(consumerAddress, consumerPort);
+}
+
+UdpNetwork::UdpNetwork(int consumerPort)
+{
+	InitWinSock();
+	InitAsConsumer(consumerPort);
 }
 
 UdpNetwork::~UdpNetwork()
 {
-	closesocket(producerSocket);
+	closesocket(mProducerSocket);
 	closesocket(consumerSocket);
 	WSACleanup();
 }
 
 void UdpNetwork::ProducerEnQ(const std::vector<uint8_t>& data)
 {
-	sendto(producerSocket, reinterpret_cast<const char*>(&data[0]), data.size(), 0, reinterpret_cast<SOCKADDR*>(&mConsumersAddress), sizeof(mConsumersAddress));
+	if (!mIsProducer)
+	{
+		Log("UdpNetwork - Must be created as a producer");
+		exit(1);
+	}
+	sendto(mProducerSocket, reinterpret_cast<const char*>(&data[0]), data.size(), 0, reinterpret_cast<SOCKADDR*>(&mConsumersAddress), sizeof(mConsumersAddress));
 }
-
 
 bool WaitData(int socket, std::chrono::duration<int, std::milli>& timeOut)
 {
@@ -100,7 +140,7 @@ bool WaitData(int socket, std::chrono::duration<int, std::milli>& timeOut)
 
 	// Timeout with no data.
 	if (result == 0) {
-		return false; 
+		return false;
 	}
 
 	if (result < 0) {
@@ -114,7 +154,6 @@ bool WaitData(int socket, std::chrono::duration<int, std::milli>& timeOut)
 
 	return true;
 }
-
 
 bool UdpNetwork::ReceiveData(int socket, std::vector<uint8_t>& data, std::chrono::duration<int, std::milli>& timeOut,
 	sockaddr_in* senderAddress, int* senderAddressSize)
@@ -131,7 +170,7 @@ bool UdpNetwork::ReceiveData(int socket, std::vector<uint8_t>& data, std::chrono
 			auto error = WSAGetLastError();
 			Log("UdpNetwork - recvfrom failed, error %d", error);
 		}
-		
+
 		haveData = numBytes > 0;
 		if (haveData)
 		{
@@ -143,27 +182,42 @@ bool UdpNetwork::ReceiveData(int socket, std::vector<uint8_t>& data, std::chrono
 	return haveData;
 }
 
-
-
 bool UdpNetwork::ProducerDeQ(std::vector<uint8_t>& data, std::chrono::duration<int, std::milli>& timeOut)
 {
+	if (!mIsProducer)
+	{
+		Log("UdpNetwork - Must be created as a producer");
+		exit(1);
+	}
+
 	sockaddr_in from;
 	int size = sizeof(from);
-	return ReceiveData(producerSocket, data, timeOut, &from, &size);
+	return ReceiveData(mProducerSocket, data, timeOut, &from, &size);
 }
-
-
 
 void UdpNetwork::ConsumerEnQ(const std::vector<uint8_t>& data)
 {
+	if (!mIsConsumer)
+	{
+		Log("UdpNetwork - Must be created as a consumer");
+		exit(1);
+	}
+
 	if (mHaveProducerAddr)
 	{
 		sendto(consumerSocket, reinterpret_cast<const char*>(&data[0]), data.size(), 0, reinterpret_cast<SOCKADDR*>(&mProducersAddress), sizeof(mProducersAddress));
 	}
 
 }
+
 bool UdpNetwork::ConsumeDeQ(std::vector<uint8_t>& data, std::chrono::duration<int, std::milli>& timeOut)
 {
+	if (!mIsConsumer)
+	{
+		Log("UdpNetwork - Must be created as a consumer");
+		exit(1);
+	}
+
 	int producerAddressSize = sizeof(mProducersAddress);
 	auto haveData = ReceiveData(consumerSocket, data, timeOut, &mProducersAddress, &producerAddressSize);
 	if (haveData)

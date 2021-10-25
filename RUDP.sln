@@ -7,6 +7,11 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Qtest", "Qtest\Qtest.vcxpro
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "QUDP", "QDP\QDP.vcxproj", "{EEFE788F-37CA-4D38-8317-96E9ACBAA1CE}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "DemoSignalGeneratorReceiver", "SignalProducer\SignalProducer.vcxproj", "{4C112172-18EB-40B8-A072-604BF5619FCD}"
+	ProjectSection(ProjectDependencies) = postProject
+		{EEFE788F-37CA-4D38-8317-96E9ACBAA1CE} = {EEFE788F-37CA-4D38-8317-96E9ACBAA1CE}
+	EndProjectSection
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
@@ -31,6 +36,14 @@ Global
 		{EEFE788F-37CA-4D38-8317-96E9ACBAA1CE}.Release|x64.Build.0 = Release|x64
 		{EEFE788F-37CA-4D38-8317-96E9ACBAA1CE}.Release|x86.ActiveCfg = Release|Win32
 		{EEFE788F-37CA-4D38-8317-96E9ACBAA1CE}.Release|x86.Build.0 = Release|Win32
+		{4C112172-18EB-40B8-A072-604BF5619FCD}.Debug|x64.ActiveCfg = Debug|x64
+		{4C112172-18EB-40B8-A072-604BF5619FCD}.Debug|x64.Build.0 = Debug|x64
+		{4C112172-18EB-40B8-A072-604BF5619FCD}.Debug|x86.ActiveCfg = Debug|Win32
+		{4C112172-18EB-40B8-A072-604BF5619FCD}.Debug|x86.Build.0 = Debug|Win32
+		{4C112172-18EB-40B8-A072-604BF5619FCD}.Release|x64.ActiveCfg = Release|x64
+		{4C112172-18EB-40B8-A072-604BF5619FCD}.Release|x64.Build.0 = Release|x64
+		{4C112172-18EB-40B8-A072-604BF5619FCD}.Release|x86.ActiveCfg = Release|Win32
+		{4C112172-18EB-40B8-A072-604BF5619FCD}.Release|x86.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

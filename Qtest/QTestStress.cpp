@@ -12,7 +12,7 @@ namespace Qtest
 		TestBody(int value) :mValue(value) {}
 		TestBody() {};
 
-		int mValue{ 0 };
+		uint32_t mValue{ 0 };
 	};
 
 	class ImperfectNetwork : public IdealNetwork
@@ -95,13 +95,15 @@ namespace Qtest
 	TEST_CLASS(QtestStress)
 	{
 	private:
-		void StressTestNetwork(std::shared_ptr<INetwork> network, uint16_t numberOfFrames)
+		void StressTestNetwork(std::shared_ptr<INetwork> network, uint32_t numberOfFrames)
 		{
 			auto queue = std::make_shared<ReliableQ<TestBody>>(network);
 			auto producer = std::async(std::launch::async, [&](std::shared_ptr<ReliableQ<TestBody>> p)
 				{
-					for (uint16_t i = 0; i < numberOfFrames; ++i)
+					std::chrono::duration<int, std::micro> sleepTime(500);
+					for (uint32_t i = 0; i < numberOfFrames; ++i)
 					{
+						std::this_thread::sleep_for(sleepTime);
 						TestBody d(i);
 						p->EnQ(d);
 					}
@@ -109,7 +111,7 @@ namespace Qtest
 
 			auto consumer = std::thread([&](std::shared_ptr<ReliableQ<TestBody>> p)
 				{
-					int expected = 0;
+					uint32_t expected = 0;
 					while (expected < numberOfFrames)
 					{
 						TestBody d;
@@ -150,7 +152,7 @@ namespace Qtest
 		TEST_METHOD(StressReallyBadNetwork)
 		{
 			auto network = std::make_shared<ImperfectNetwork>(50.0f/3.0f, 50.0f / 3.0f, 50.0f / 3.0f);
-			StressTestNetwork(network, /*60000*/200);
+			StressTestNetwork(network, 200);
 		}
 
 		TEST_METHOD(StressUdpLoopBackNetwork)

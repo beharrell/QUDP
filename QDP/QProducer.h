@@ -2,7 +2,7 @@
 #include <future>
 #include "QNetwork.h"
 
-template <class T> class Producer
+template <class T> class QProducer
 {
 private:
 	uint16_t mTxSequenceNo{ 1 };
@@ -69,7 +69,7 @@ private:
 
 	void Work()
 	{
-		std::chrono::duration<int, std::milli> deQDataTimeOut(100);
+		//std::chrono::duration<int, std::milli> deQDataTimeOut(100);
 		std::chrono::duration<int, std::milli> deQAckTimeOut(0);
 		while (!mStop)
 		{
@@ -82,7 +82,7 @@ private:
 			else
 			{
 				T data;
-				bool hasData = mProducerQ.DeQ(data, deQDataTimeOut);
+				bool hasData = mProducerQ.DeQ(data, timeTillNextResend);
 				if (hasData)
 				{
 					Frame<T> frame(Header(mTxSequenceNo++), data);
@@ -104,7 +104,7 @@ private:
 		}
 	}
 public:
-	Producer(std::shared_ptr<INetwork>& transport) :mProducerQ("ToSendQ"), mTransport(transport)
+	QProducer(std::shared_ptr<INetwork>& transport) :mProducerQ("ToSendQ"), mTransport(transport)
 	{
 		mTimePendingFrameLastSent = std::chrono::system_clock::now();
 		mWorker = std::async(std::launch::async, [&]() {Work(); });

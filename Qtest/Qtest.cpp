@@ -54,7 +54,7 @@ namespace Qtest
 		TEST_METHOD(Producer_allInWondowMessagesDelivered)
 		{
 			std::shared_ptr<INetwork> network(new IdealNetwork());
-			auto producer = std::make_unique<Producer<TestBody>>(network);
+			auto producer = std::make_unique<QProducer<TestBody>>(network);
 			producer->EnQ(TestBody{ 10 });
 			producer->EnQ(TestBody{ 20 });
 			producer->EnQ(TestBody{ 30 });
@@ -70,7 +70,7 @@ namespace Qtest
 		TEST_METHOD(Producer_lastPendingResent)
 		{
 			std::shared_ptr<INetwork> network(new IdealNetwork());
-			auto producer = std::make_unique<Producer<TestBody>>(network);
+			auto producer = std::make_unique<QProducer<TestBody>>(network);
 			producer->EnQ(TestBody{ 10 });
 			producer->EnQ(TestBody{ 20 });
 			producer->EnQ(TestBody{ 30 });
@@ -86,7 +86,7 @@ namespace Qtest
 		TEST_METHOD(Producer_AckClearPending)
 		{
 			std::shared_ptr<INetwork> network(new IdealNetwork());
-			auto producer = std::make_unique<Producer<TestBody>>(network);
+			auto producer = std::make_unique<QProducer<TestBody>>(network);
 			producer->EnQ(TestBody{ 10 });
 			producer->EnQ(TestBody{ 20 });
 			producer->EnQ(TestBody{ 30 });
@@ -105,7 +105,7 @@ namespace Qtest
 		TEST_METHOD(Producer_OutOfOrderAckIgnored)
 		{
 			std::shared_ptr<INetwork> network(new IdealNetwork());
-			auto producer = std::make_unique<Producer<TestBody>>(network);
+			auto producer = std::make_unique<QProducer<TestBody>>(network);
 			producer->EnQ(TestBody{ 10 });
 			producer->EnQ(TestBody{ 20 });
 			producer->EnQ(TestBody{ 30 });
@@ -125,7 +125,7 @@ namespace Qtest
 		TEST_METHOD(Producer_WindowThreshholdExceeded_onlyWindowSent)
 		{
 			std::shared_ptr<INetwork> network(new IdealNetwork());
-			auto producer = std::make_unique<Producer<TestBody>>(network);
+			auto producer = std::make_unique<QProducer<TestBody>>(network);
 			for (int i = 1; i <= producer->MaxPendingFrames() + 5; ++i)
 			{
 				producer->EnQ(TestBody{ i * 10 });
@@ -142,7 +142,7 @@ namespace Qtest
 		TEST_METHOD(Producer_FullWindowCleared_remainingFramesSent)
 		{
 			std::shared_ptr<INetwork> network(new IdealNetwork());
-			auto producer = std::make_unique<Producer<TestBody>>(network);
+			auto producer = std::make_unique<QProducer<TestBody>>(network);
 			auto framesToSend = producer->MaxPendingFrames() + 5;
 			for (int i = 1; i <= framesToSend; ++i)
 			{
@@ -162,7 +162,7 @@ namespace Qtest
 		TEST_METHOD(Consumer_InSequenceMessageDelivered)
 		{
 			std::shared_ptr<INetwork> network(new IdealNetwork());
-			auto consumer = std::make_unique<Consumer<TestBody>>(network);
+			auto consumer = std::make_unique<QConsumer<TestBody>>(network);
 			int expected = 10;
 			uint16_t seqNo = 1;
 			Frame frame(Header(seqNo), TestBody{ expected });
@@ -182,7 +182,7 @@ namespace Qtest
 		TEST_METHOD(Consumer_SendsAcksWhenNoDataRx)
 		{
 			auto network = std::shared_ptr<INetwork>(new IdealNetwork());
-			auto consumer = std::make_unique<Consumer<TestBody>>(network);
+			auto consumer = std::make_unique<QConsumer<TestBody>>(network);
 
 			std::this_thread::sleep_for(std::chrono::duration<int, std::milli>(1000));
 			consumer->Stop();
@@ -196,7 +196,7 @@ namespace Qtest
 		TEST_METHOD(Consumer_OutOfOrderDataIsNotDelivered)
 		{
 			auto network = std::shared_ptr<INetwork>(new IdealNetwork());
-			auto consumer = std::make_unique<Consumer<TestBody>>(network);
+			auto consumer = std::make_unique<QConsumer<TestBody>>(network);
 
 			network->ProducerEnQ(Frame(Header(2), TestBody{ 20 }).mBytes);
 			network->ProducerEnQ(Frame(Header(3), TestBody{ 30 }).mBytes);
@@ -212,7 +212,7 @@ namespace Qtest
 		TEST_METHOD(Consumer_OutOfOrderDataIsDeliveredWhenMissingDataArrives)
 		{
 			auto network = std::shared_ptr<INetwork>(new IdealNetwork());
-			auto consumer = std::make_unique<Consumer<TestBody>>(network);
+			auto consumer = std::make_unique<QConsumer<TestBody>>(network);
 
 			network->ProducerEnQ(Frame(Header(2), TestBody{ 20 }).mBytes);
 			network->ProducerEnQ(Frame(Header(3), TestBody{ 30 }).mBytes);
@@ -242,7 +242,7 @@ namespace Qtest
 		TEST_METHOD(Consumer_DuplicatePendingFrameIgnored)
 		{
 			auto network = std::shared_ptr<INetwork>(new IdealNetwork());
-			auto consumer = std::make_unique<Consumer<TestBody>>(network);
+			auto consumer = std::make_unique<QConsumer<TestBody>>(network);
 
 			network->ProducerEnQ(Frame(Header(2), TestBody{ 20 }).mBytes);
 			network->ProducerEnQ(Frame(Header(3), TestBody{ 30 }).mBytes);
@@ -269,7 +269,7 @@ namespace Qtest
 		TEST_METHOD(Consumer_DuplicateDeliveredFrameIgnored)
 		{
 			auto network = std::shared_ptr<INetwork>(new IdealNetwork());
-			auto consumer = std::make_unique<Consumer<TestBody>>(network);
+			auto consumer = std::make_unique<QConsumer<TestBody>>(network);
 
 			network->ProducerEnQ(Frame(Header(1), TestBody{ 10 }).mBytes);
 			network->ProducerEnQ(Frame(Header(2), TestBody{ 20 }).mBytes);
