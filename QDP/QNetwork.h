@@ -226,6 +226,7 @@ struct Header
 	}
 
 	uint16_t mSeqNo{ 0 };
+	uint16_t mTxTime_sec{ 0 }; // 18 hrs without wrap around
 	uint16_t mDataSize{ 0 };
 };
 
