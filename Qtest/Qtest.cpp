@@ -69,7 +69,7 @@ namespace Qtest
 			consumer->Stop();
 			size_t waitingAckCount;
 			auto ackHeader = GetLastAck(network, waitingAckCount);
-			Assert::AreEqual((int)seqNo, (int)ackHeader.mSeqNo);
+			Assert::AreEqual((int)seqNo, (int)ackHeader.mId.mSeqNo);
 		}
 
 		TEST_METHOD(Consumer_SendsAcksWhenNoDataRx)
@@ -83,7 +83,7 @@ namespace Qtest
 			size_t waitingAckCount;
 			auto ackHeader = GetLastAck(network, waitingAckCount);
 			Assert::IsTrue(8 <= waitingAckCount && waitingAckCount <= 10);
-			Assert::AreEqual(0, (int)ackHeader.mSeqNo);
+			Assert::AreEqual(0, (int)ackHeader.mId.mSeqNo);
 		}
 
 		TEST_METHOD(Consumer_OutOfOrderDataIsNotDelivered)
@@ -99,7 +99,7 @@ namespace Qtest
 			consumer->Stop();
 			size_t waitingAckCount;
 			auto ackHeader = GetLastAck(network, waitingAckCount);
-			Assert::AreEqual((int)0, (int)ackHeader.mSeqNo); // consumers initial seq num
+			Assert::AreEqual((int)0, (int)ackHeader.mId.mSeqNo); // consumers initial seq num
 		}
 
 		TEST_METHOD(Consumer_OutOfOrderDataIsDeliveredWhenMissingDataArrives)
@@ -114,7 +114,7 @@ namespace Qtest
 			Assert::AreEqual(0, (int)consumer->Size());
 			size_t waitingAckCount;
 			auto ackHeader = GetLastAck(network, waitingAckCount);
-			Assert::AreEqual((int)0, (int)ackHeader.mSeqNo);
+			Assert::AreEqual((int)0, (int)ackHeader.mId.mSeqNo);
 
 			network->ProducerEnQ(Frame(Header(1), TestBody{ 10 }).mBytes);
 			std::this_thread::sleep_for(std::chrono::duration<int, std::milli>(500));
@@ -123,7 +123,7 @@ namespace Qtest
 
 			Assert::AreEqual(3, (int)consumer->Size());
 			ackHeader = GetLastAck(network, waitingAckCount);
-			Assert::AreEqual((int)3, (int)ackHeader.mSeqNo);
+			Assert::AreEqual((int)3, (int)ackHeader.mId.mSeqNo);
 			for (int i = 1; i <= 3; ++i)
 			{
 				TestBody rcvddata;
@@ -150,7 +150,7 @@ namespace Qtest
 			Assert::AreEqual(3, (int)consumer->Size());
 			size_t waitingAckCount;
 			auto ackHeader = GetLastAck(network, waitingAckCount);
-			Assert::AreEqual((int)3, (int)ackHeader.mSeqNo);
+			Assert::AreEqual((int)3, (int)ackHeader.mId.mSeqNo);
 			for (int i = 1; i <= 3; ++i)
 			{
 				TestBody rcvddata;
@@ -172,7 +172,7 @@ namespace Qtest
 			Assert::AreEqual(3, (int)consumer->Size());
 			size_t waitingAckCount;
 			auto ackHeader = GetLastAck(network, waitingAckCount);
-			Assert::AreEqual((int)3, (int)ackHeader.mSeqNo);
+			Assert::AreEqual((int)3, (int)ackHeader.mId.mSeqNo);
 			for (int i = 1; i <= 3; ++i)
 			{
 				TestBody rcvddata;
@@ -185,7 +185,7 @@ namespace Qtest
 			Assert::AreEqual(0, (int)consumer->Size());
 			consumer->Stop();
 			ackHeader = GetLastAck(network, waitingAckCount);
-			Assert::AreEqual((int)3, (int)ackHeader.mSeqNo);
+			Assert::AreEqual((int)3, (int)ackHeader.mId.mSeqNo);
 		}
 	};
 }

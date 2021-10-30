@@ -217,16 +217,22 @@ public:
 	}
 };
 
+struct FrameId 
+{
+	FrameId(uint16_t seqNo, uint16_t txTime_sec) :mSeqNo(seqNo), mTxTime_sec(txTime_sec) {}
+	uint16_t mSeqNo{ 0 };      // unique for a mTxTime_sec value
+	uint16_t mTxTime_sec{ 0 }; // 18 hrs without wrap around
+};
 
 struct Header
 {
-	Header(uint16_t seqNo) :mSeqNo(seqNo) {};
+	Header(uint16_t seqNo) :mId(seqNo, 0) {}; // just to get things to compile for the moment
+	Header(uint16_t seqNo, uint16_t txTime_sec) :mId(seqNo, txTime_sec){};
 	Header()
 	{
 	}
 
-	uint16_t mSeqNo{ 0 };
-	uint16_t mTxTime_sec{ 0 }; // 18 hrs without wrap around
+	FrameId mId{0,0};
 	uint16_t mDataSize{ 0 };
 };
 

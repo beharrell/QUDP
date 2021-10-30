@@ -13,15 +13,18 @@ private:
 
 	void Work()
 	{
-		std::chrono::duration<int, std::milli> timeOut(0);
+		using namespace std::chrono;
+		duration<int, std::milli> timeOut(50);
+		const auto startTime = system_clock::now();
 		while (!mStop)
 		{
 			T data;
 			bool hasData = mProducerQ.DeQ(data, timeOut);
 			if (hasData)
 			{
-				Frame<T> frame(Header(mTxSequenceNo++), data);
-				Log("Prod - sending new frame %d", frame.mHeader.mSeqNo);
+				auto secSinceStart = duration_cast<seconds>(system_clock::now() - startTime);
+				Frame<T> frame(Header(mTxSequenceNo++, static_cast<uint16_t>(secSinceStart.count())), data);
+				Log("Prod - sending new frame (%d,%d)", frame.mHeader.mId.mTxTime_sec, frame.mHeader.mId.mSeqNo);
 				mTransport->ProducerEnQ(frame.mBytes);
 			}
 		}

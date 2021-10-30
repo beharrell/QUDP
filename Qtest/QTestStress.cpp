@@ -42,7 +42,7 @@ namespace Qtest
 					sendFunction(dataCopy);
 				}
 				dataCopy = data;
-				Log("%s Duplicating %d", direction.c_str(), frame.mHeader.mSeqNo);
+				Log("%s Duplicating %d", direction.c_str(), frame.mHeader.mId.mSeqNo);
 			}
 			else if (TakeAChance(mPrbDelay))
 			{
@@ -52,12 +52,12 @@ namespace Qtest
 				}
 				dataCopy = data;
 				sendData = false;
-				Log("%s Delaying %d", direction.c_str(), frame.mHeader.mSeqNo);
+				Log("%s Delaying %d", direction.c_str(), frame.mHeader.mId.mSeqNo);
 			}
 			else if (TakeAChance(mPrbLost))
 			{
 				sendData = false;
-				Log("%s Lost %d", direction.c_str(), frame.mHeader.mSeqNo);
+				Log("%s Lost %d", direction.c_str(), frame.mHeader.mId.mSeqNo);
 			}
 
 			if (sendData)
@@ -143,17 +143,6 @@ namespace Qtest
 			StressTestNetwork(network, 200);
 		}
 
-		TEST_METHOD(StressLosyNetwork)
-		{
-			auto network = std::make_shared<ImperfectNetwork>(50.0f, 0.0f, 0.0f);
-			StressTestNetwork(network, 200);
-		}
-
-		TEST_METHOD(StressReallyBadNetwork)
-		{
-			auto network = std::make_shared<ImperfectNetwork>(50.0f/3.0f, 50.0f / 3.0f, 50.0f / 3.0f);
-			StressTestNetwork(network, 200);
-		}
 
 		TEST_METHOD(StressUdpLoopBackNetwork)
 		{

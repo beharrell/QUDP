@@ -10,71 +10,96 @@ private:
 	std::shared_ptr<INetwork> mTransport;
 	std::future<void> mWorker;
 	bool mStop{ false };
-	std::unordered_map<uint16_t, Frame<T>> pendingData;
+	std::unordered_map<uint16_t, Frame<T>> mPendingData;
+	std::chrono::system_clock::time_point mTimeLastDelivered;
+	std::function<void(uint16_t)> mMissedFrameCallBack;
 
-	bool LooksLikeADuplicate(uint16_t lastOrderedSeqenceNumber, Frame<T>& frame)
+	bool LooksLikeADuplicate(FrameId lastDeliveredId, Frame<T>& frame)
 	{
 		constexpr uint16_t maxSeq = -1;
 		constexpr uint16_t window = maxSeq / 2;
-		const uint16_t minExcludedSequence = lastOrderedSeqenceNumber - window;
-		bool isADuplicate = false;
-		bool windowWrappedAround = minExcludedSequence > lastOrderedSeqenceNumber;
+		const uint16_t minExcludedSequence = lastDeliveredId.mSeqNo - window;
+		bool isADuplicate = true;
+		bool windowWrappedAround = minExcludedSequence > lastDeliveredId.mSeqNo;
 		bool frameInExclusionWindow = false;
+		const auto newFramesId = frame.mHeader.mId;
+
 		if (windowWrappedAround)
 		{
-			frameInExclusionWindow = frame.mHeader.mSeqNo <= lastOrderedSeqenceNumber || frame.mHeader.mSeqNo >= minExcludedSequence;
+			frameInExclusionWindow = newFramesId.mSeqNo <= lastDeliveredId.mSeqNo || newFramesId.mSeqNo >= minExcludedSequence;
 		}
 		else
 		{
-			frameInExclusionWindow = minExcludedSequence <= frame.mHeader.mSeqNo && frame.mHeader.mSeqNo <= lastOrderedSeqenceNumber;
+			frameInExclusionWindow = minExcludedSequence <= newFramesId.mSeqNo && newFramesId.mSeqNo <= lastDeliveredId.mSeqNo;
 		}
 
 		if (frameInExclusionWindow)
 		{
-			Log("Consumer - rx out of window frame %d", frame.mHeader.mSeqNo);
-			isADuplicate = true;
+			Log("Consumer - rx out of window frame %d", newFramesId.mSeqNo);
 		}
-		if (pendingData.find(frame.mHeader.mSeqNo) != pendingData.end())
+		else if (newFramesId.mTxTime_sec < lastDeliveredId.mTxTime_sec)
+		{   
+			Log("Consumer - rejected frame with timestamp %d last delievred was %d", newFramesId.mTxTime_sec, lastDeliveredId.mTxTime_sec);
+		}
+		else if (mPendingData.find(newFramesId.mSeqNo) != mPendingData.end())
 		{
-			Log("Consumer - rx duplicate pending frame %d", frame.mHeader.mSeqNo);
-			isADuplicate = true;
+			Log("Consumer - rx duplicate pending frame %d", newFramesId.mSeqNo);
+		}
+		else
+		{
+			isADuplicate = false;
 		}
 
 		return isADuplicate;
 	}
 
-	uint16_t ProcessFrame(uint16_t lastOrderedSeqenceNumber, Frame<T>& frame)
+	FrameId ProcessPendingFrames(FrameId lastDeliveredID)
 	{
-		if (LooksLikeADuplicate(lastOrderedSeqenceNumber, frame))
+		auto nextFrame = mPendingData.find(lastDeliveredID.mSeqNo + 1);
+		auto now = std::chrono::system_clock::now();
+		if (nextFrame == mPendingData.end())
 		{
-			return lastOrderedSeqenceNumber;
+			constexpr std::chrono::duration<int, std::milli> timeOut(200);
+			if ((now - mTimeLastDelivered) > timeOut)
+			{
+				Log("Consumer - waiting too long for %d, moving on", lastDeliveredID.mSeqNo);
+				if (mMissedFrameCallBack != nullptr)
+				{
+					mMissedFrameCallBack(lastDeliveredID.mSeqNo);
+				}
+				lastDeliveredID.mSeqNo++;
+				mTimeLastDelivered = now;
+				nextFrame = mPendingData.find(lastDeliveredID.mSeqNo + 1);
+			}
 		}
 
-		pendingData.insert({ frame.mHeader.mSeqNo, frame });
-		auto nextFrame = pendingData.find(lastOrderedSeqenceNumber + 1);
-		while (nextFrame != pendingData.end())
+
+		while (nextFrame != mPendingData.end())
 		{
-			Log("Consumer - delivering %d", nextFrame->second.mHeader.mSeqNo);
-			mConsumerQ.EnQ(nextFrame->second.mBody);
-			pendingData.erase(nextFrame);
-			++lastOrderedSeqenceNumber;
-			nextFrame = pendingData.find(lastOrderedSeqenceNumber + 1);
+			auto& frameToDeliver = nextFrame->second;
+			Log("Consumer - delivering %d", frameToDeliver.mHeader.mId.mSeqNo);
+			mConsumerQ.EnQ(frameToDeliver.mBody);
+			lastDeliveredID = frameToDeliver.mHeader.mId;
+			mPendingData.erase(nextFrame);
+			mTimeLastDelivered = now;
+			nextFrame = mPendingData.find(lastDeliveredID.mSeqNo + 1);
 		}
 
 		std::string frameNumbers;
-		for (auto pendingFrame : pendingData)
+		for (auto pendingFrame : mPendingData)
 		{
 			frameNumbers += std::to_string(pendingFrame.first) + ",";
 		}
 		Log("Consumer - pending frames %s", frameNumbers.c_str());
 
-		return lastOrderedSeqenceNumber;
+		return lastDeliveredID;
 	}
 
 	void Work()
 	{
-		uint16_t lastOrderedSeqenceNumber = 0;
+		FrameId lastDeliveredID{0,0};
 		std::chrono::duration<int, std::milli> timeOut(100);
+		mTimeLastDelivered = std::chrono::system_clock::now();
 
 		while (!mStop)
 		{
@@ -85,24 +110,22 @@ private:
 				Frame<T> frame(data);
 				if (frame.mHasBody)
 				{
-					lastOrderedSeqenceNumber = ProcessFrame(lastOrderedSeqenceNumber, frame);
+					if (!LooksLikeADuplicate(lastDeliveredID, frame))
+					{
+						mPendingData.insert({ frame.mHeader.mId.mSeqNo, frame });
+					}				
 				}
 			}
-
-			if (!mStop)
-			{
-				// dumb down the ack rate later
-				Header ackHeader(lastOrderedSeqenceNumber);
-				Frame<T> ackFrame(ackHeader);
-				Log("Consumer - acknowledging %d", lastOrderedSeqenceNumber);
-				mTransport->ConsumerEnQ(ackFrame.mBytes);
-			}
+			lastDeliveredID = ProcessPendingFrames(lastDeliveredID);
 		}
 	}
 
 
 public:
-	QConsumer(std::shared_ptr<INetwork>& transport) :mConsumerQ("DeliveredQ"), mTransport(transport)
+	QConsumer(std::shared_ptr<INetwork>& transport) :QConsumer(transport, nullptr) {}
+
+	QConsumer(std::shared_ptr<INetwork>& transport, std::function<void(uint16_t)> missedFrameCallback) :
+		mConsumerQ("DeliveredQ"), mTransport(transport), mMissedFrameCallBack(missedFrameCallback)
 	{
 		mWorker = std::async(std::launch::async, [&]() {Work(); });
 	}
